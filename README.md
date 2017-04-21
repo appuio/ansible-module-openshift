@@ -13,3 +13,4 @@ meta/main.yml of your role:
       - src: git+https://github.com/appuio/ansible-module-openshift.git
         version: v1.0.0
 
+Documentation of the roles is contained within the roles as per Ansible conventions.

@@ -49,21 +49,6 @@ options:
     required: false
     default: None
     aliases: []
-  name:
-    description:
-    - Name of resource to patch.
-    - Only relevant when I(patch) parameter is given.
-    required: false
-    default: None
-    aliases: []
-  type:
-    description:
-    - Type of resource to patch.
-    - Run C(oc types) to see available types.
-    - Only relevant when I(patch) parameter is given.
-    required: false
-    default: None
-    aliases: []
 author:
 - "Daniel Tschan <tschan@puzzle.ch>"
 extends_documentation_fragment: []
@@ -181,8 +166,15 @@ class ResourceModule:
       (rc, stdout, stderr) = self.module.run_command(['oc', 'patch', '-n', self.namespace, kind + '/' + name, '-p', json.dumps(patch)], check_rc=True)
 
 
-  def update_resource(self, kind, name, object):
+  def update_resource(self, object, path = ""):
+    kind = object.get('kind')
+    name = object.get('metadata', {}).get('name')
     #logging.debug("update_resource " + str(kind) + " " + str(name))
+    if not kind:
+      self.module.fail_json(msg=path + ".kind is undefined!")
+    if not name:
+      self.module.fail_json(msg=path + ".metadata.name is undefined!")
+
     current = self.export_resource(kind, name)
 
     if not current:
@@ -217,8 +209,8 @@ class ResourceModule:
   def apply_template(self, template_name, arguments):
     template = self.process_template(template_name, arguments)
 
-    for object in template['items']:
-      self.update_resource(object['kind'], object['metadata']['name'], object)
+    for i, object in enumerate(template['items']):
+      self.update_resource(object, ".items[" + i + "]")
 
 
 def main():
@@ -231,8 +223,6 @@ def main():
             app_name = dict(type='str'),
             arguments = dict(type='dict'),
             patch = dict(type='dict'),
-            name = dict(type='str'),
-            type = dict(type='str'),
         ),
         supports_check_mode=True
     )
@@ -242,7 +232,7 @@ def main():
     if resource.template:
       resource.apply_template(resource.template, resource.arguments)
     else:
-      resource.update_resource(resource.type, resource.name, resource.patch)
+      resource.update_resource(resource.patch)
 
     module.exit_json(changed=resource.changed, msg=" ".join(resource.msg))
 
