@@ -210,7 +210,7 @@ class ResourceModule:
     template = self.process_template(template_name, arguments)
 
     for i, object in enumerate(template['items']):
-      self.update_resource(object, ".items[" + i + "]")
+      self.update_resource(object, ".items[" + str(i) + "]")
 
 
 def main():
