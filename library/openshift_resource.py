@@ -90,7 +90,7 @@ class ResourceModule:
         if not self.patch_applied(kind, name, current.get(key), val, path + "." + key):
           return False
     elif isinstance(patch, list):
-      if not self.sublist(kind, name, current, patch, path):
+      if not self.strategic_list_compare(kind, name, current, patch, path):
         return False
     else:
       if current != patch and not self.exemption(kind, current, patch, path):
@@ -113,7 +113,7 @@ class ResourceModule:
     return True
 
 
-  def sublist(self, kind, name, current, patch, path):
+  def strategic_list_compare(self, kind, name, current, patch, path):
     if not current and not patch:
       return True
     elif not current:
@@ -134,6 +134,8 @@ class ResourceModule:
             return False
         else:
           module.fail_json(msg="Patch contains multiple attributes with name '" + elementName + "' under path: " + path)
+    else:
+        return self.equalList(kind, name, current, patch, path)
 
     return True
 
