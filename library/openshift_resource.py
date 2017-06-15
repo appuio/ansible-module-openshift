@@ -4,7 +4,6 @@ import json
 from StringIO import StringIO
 import tempfile
 import re
-#import logging
 
 DOCUMENTATION = '''
 ---
@@ -64,25 +63,39 @@ class ResourceModule:
 
     self.changed = False
     self.msg = []
+    self.log = []
     self.arguments = []
 
     for key in module.params:
       setattr(self, key, module.params[key])
 
+
+  def debug(self, msg, *args):
+    if self.module._verbosity >= 3:
+      self.log.append(msg % args)
+
+
+  def trace(self, msg, *args):
+    if self.module._verbosity >= 4:
+      self.log.append(msg % args)
+
+
   def exemption(self, kind, current, patch, path):
     if patch is None or isinstance(patch, (dict, list)) and not patch:
       return True
+    elif re.match('\.status\..*', path):
+      return True
     elif kind == 'DeploymentConfig' and re.match('.spec.template.spec.containers\[[0-9]+\].image', path):
-      image = patch.split(':')[0]
-      return ("/" + image + "@") in current
+      return "@" in current
 
     return False
 
 
   def patch_applied(self, kind, name, current, patch, path = ""):
-    #logging.debug(path)
+    self.trace("patch_applied %s", path)
+
     if current is None:
-      if not patch is None:
+      if not patch is None and not self.exemption(kind, current, patch, path):
         self.msg.append(self.namespace + "::" + kind + "/" + name + "{" + path + "}(" + str(patch) + " != " + str(current) + ")")
         return False
     elif isinstance(patch, dict):
@@ -123,7 +136,7 @@ class ResourceModule:
       for i, patchVal in enumerate(patch):
         elementName = patchVal.get('name')
         if elementName is None:  # Patch contains element without name attribute => fall back to plain list comparison.
-          #logging.debug("Patch contains element without name attribute => fall back to plain list comparison.")
+          self.debug("Patch contains element without name attribute => fall back to plain list comparison.")
           return self.equalList(kind, name, current, patch, path)
         curVals = [curVal for curVal in current if curVal.get('name') == elementName]
         if len(curVals) == 0:
@@ -133,7 +146,7 @@ class ResourceModule:
           if not self.patch_applied(kind, name, curVals[0], patchVal, path + '[' + str(i) + ']'):
             return False
         else:
-          module.fail_json(msg="Patch contains multiple attributes with name '" + elementName + "' under path: " + path)
+          self.module.fail_json(msg="Patch contains multiple attributes with name '" + elementName + "' under path: " + path, debug=self.log)
     else:
         return self.equalList(kind, name, current, patch, path)
 
@@ -144,7 +157,7 @@ class ResourceModule:
     if label:
       name = '-l ' + label
 
-    (rc, stdout, stderr) = self.module.run_command(['oc', 'export', '-n', self.namespace, kind + '/' + name, '-o', 'json'])
+    (rc, stdout, stderr) = self.module.run_command(['oc', 'get', '--export', '-n', self.namespace, kind + '/' + name, '-o', 'json'])
 
     if rc == 0:
       result = json.load(StringIO(stdout))
@@ -171,11 +184,11 @@ class ResourceModule:
   def update_resource(self, object, path = ""):
     kind = object.get('kind')
     name = object.get('metadata', {}).get('name')
-    #logging.debug("update_resource " + str(kind) + " " + str(name))
+    self.debug("update_resource %s %s", kind, name)
     if not kind:
-      self.module.fail_json(msg=path + ".kind is undefined!")
+      self.module.fail_json(msg=path + ".kind is undefined!", debug=self.log)
     if not name:
-      self.module.fail_json(msg=path + ".metadata.name is undefined!")
+      self.module.fail_json(msg=path + ".metadata.name is undefined!", debug=self.log)
 
     current = self.export_resource(kind, name)
 
@@ -193,7 +206,7 @@ class ResourceModule:
   def process_template(self, template_name, arguments):
     if arguments:
       args = " -p " + " -p ".join("=".join(_) for _ in arguments.items())
-      #logging.info(args)
+      self.debug("process_template %s %s", template_name, args)
     else:
       args = ""
 
@@ -203,7 +216,7 @@ class ResourceModule:
     (rc, stdout, stderr) = self.module.run_command('oc new-app -o json ' + template_name + args, check_rc=True)
 
     if stderr:
-      self.module.fail_json(msg=stderr)
+      self.module.fail_json(msg=stderr, debug=self.log)
 
     return json.load(StringIO(stdout))
 
@@ -216,8 +229,6 @@ class ResourceModule:
 
 
 def main():
-    #logging.basicConfig(filename='/var/log/lib_appuio/openshift_resource.log', level=logging.INFO)
-
     module = AnsibleModule(
         argument_spec=dict(
             namespace = dict(type='str'),
@@ -236,8 +247,10 @@ def main():
     else:
       resource.update_resource(resource.patch)
 
-    module.exit_json(changed=resource.changed, msg=" ".join(resource.msg))
-
+    if module._verbosity >= 3:
+      module.exit_json(changed=resource.changed, msg=resource.msg, debug=resource.log)
+    else:
+      module.exit_json(changed=resource.changed, msg=resource.msg)
 
 from ansible.module_utils.basic import *
 if __name__ == "__main__":
