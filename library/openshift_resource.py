@@ -157,7 +157,7 @@ class ResourceModule:
     if label:
       name = '-l ' + label
 
-    (rc, stdout, stderr) = self.module.run_command(['oc', 'get', '--export', '-n', self.namespace, kind + '/' + name, '-o', 'json'])
+    (rc, stdout, stderr) = self.module.run_command(['oc', 'get', '-n', self.namespace, kind + '/' + name, '-o', 'json'])
 
     if rc == 0:
       result = json.load(StringIO(stdout))
