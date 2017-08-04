@@ -205,15 +205,15 @@ class ResourceModule:
 
   def process_template(self, template_name, arguments):
     if arguments:
-      args = " -p " + " -p ".join("=".join(_) for _ in arguments.items())
-      self.debug("process_template %s %s", template_name, args)
+      args = [_ for arg in arguments.items() for _ in ('-p', "=".join(arg))]
+      self.debug("process_template %s %s", template_name, ' '.join(args))
     else:
-      args = ""
+      args = []
 
     if self.app_name:
       args += ' --name=' + self.app_name
 
-    (rc, stdout, stderr) = self.module.run_command('oc new-app -o json ' + template_name + args, check_rc=True)
+    (rc, stdout, stderr) = self.module.run_command(['oc', 'new-app', '-o', 'json', template_name] + args, check_rc=True)
 
     if stderr:
       self.module.fail_json(msg=stderr, debug=self.log)
