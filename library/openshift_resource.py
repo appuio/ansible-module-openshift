@@ -204,16 +204,20 @@ class ResourceModule:
 
 
   def process_template(self, template_name, arguments):
+    self.debug("process_template")
+
     if arguments:
       args = [_ for arg in arguments.items() for _ in ('-p', "=".join(arg))]
-      self.debug("process_template %s %s", template_name, ' '.join(args))
     else:
       args = []
 
     if self.app_name:
       args += ' --name=' + self.app_name
 
-    (rc, stdout, stderr) = self.module.run_command(['oc', 'new-app', '-o', 'json', template_name] + args, check_rc=True)
+    if "\n" in template_name:
+      (rc, stdout, stderr) = self.module.run_command(['oc', 'new-app', '-o', 'json', '-'] + args, data=template_name, check_rc=True)
+    else:
+      (rc, stdout, stderr) = self.module.run_command(['oc', 'new-app', '-o', 'json', template_name] + args, check_rc=True)
 
     if stderr:
       self.module.fail_json(msg=stderr, debug=self.log)
