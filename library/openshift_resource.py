@@ -212,7 +212,7 @@ class ResourceModule:
       args = []
 
     if self.app_name:
-      args += ' --name=' + self.app_name
+      args.append('--name=' + self.app_name)
 
     if "\n" in template_name:
       (rc, stdout, stderr) = self.module.run_command(['oc', 'new-app', '-o', 'json', '-'] + args, data=template_name, check_rc=True)
