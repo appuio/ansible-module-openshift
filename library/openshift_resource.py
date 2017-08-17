@@ -80,6 +80,18 @@ class ResourceModule:
       self.log.append(msg % args)
 
 
+  def remove_omitted_keys(self, object, parent = None, object_key = None):
+    if isinstance(object, dict):
+      for k, v in object.items():
+        self.remove_omitted_keys(v, object, k)
+    elif isinstance(object, list):
+      for i, v in enumerate(object[:]):
+        self.remove_omitted_keys(v, object, i)
+    elif isinstance(object, basestring):
+      if isinstance(object, basestring) and object.startswith('__omit_place_holder__'):
+        del parent[object_key]
+
+
   def exemption(self, kind, current, patch, path):
     if patch is None or isinstance(patch, (dict, list)) and not patch:
       return True
@@ -190,6 +202,8 @@ class ResourceModule:
     if not name:
       self.module.fail_json(msg=path + ".metadata.name is undefined!", debug=self.log)
 
+    self.remove_omitted_keys(object)
+
     current = self.export_resource(kind, name)
 
     if not current:
@@ -227,6 +241,8 @@ class ResourceModule:
 
   def apply_template(self, template_name, arguments):
     template = self.process_template(template_name, arguments)
+
+    self.remove_omitted_keys(template)
 
     for i, object in enumerate(template['items']):
       self.update_resource(object, ".items[" + str(i) + "]")
