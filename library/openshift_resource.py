@@ -4,6 +4,7 @@ import json
 from StringIO import StringIO
 import tempfile
 import re
+import traceback
 
 DOCUMENTATION = '''
 ---
@@ -78,6 +79,19 @@ class ResourceModule:
   def trace(self, msg, *args):
     if self.module._verbosity >= 4:
       self.log.append(msg % args)
+
+
+  def run_command(self, args, **kwargs):
+    if self.module._verbosity < 3 or not kwargs['check_rc']:  # Not running in debug mode, call module run_command which filters passwords
+      return self.module.run_command(args, **kwargs)
+
+    kwargs['check_rc'] = False
+    (rc, stdout, stderr) = self.module.run_command(args, **kwargs)
+
+    if rc != 0:
+      self.module.fail_json(cmd=args, rc=rc, stdout=stdout, stderr=stderr, msg=stderr, debug=self.log)
+
+    return (rc, stdout, stderr)
 
 
   def remove_omitted_keys(self, object, parent = None, object_key = None):
@@ -184,13 +198,13 @@ class ResourceModule:
       file = tempfile.NamedTemporaryFile(prefix=kind + '_' + name, delete=True)
       json.dump(object, file)
       file.flush()
-      (rc, stdout, stderr) = self.module.run_command(['oc', 'create', '-n', self.namespace, '-f', file.name], check_rc=True)
+      (rc, stdout, stderr) = self.run_command(['oc', 'create', '-n', self.namespace, '-f', file.name], check_rc=True)
       file.close()
 
 
   def patch_resource(self, kind, name, patch):
     if not self.module.check_mode:
-      (rc, stdout, stderr) = self.module.run_command(['oc', 'patch', '-n', self.namespace, kind + '/' + name, '-p', json.dumps(patch)], check_rc=True)
+      (rc, stdout, stderr) = self.run_command(['oc', 'patch', '-n', self.namespace, kind + '/' + name, '-p', json.dumps(patch)], check_rc=True)
 
 
   def update_resource(self, object, path = ""):
@@ -229,9 +243,9 @@ class ResourceModule:
       args.append('--name=' + self.app_name)
 
     if "\n" in template_name:
-      (rc, stdout, stderr) = self.module.run_command(['oc', 'new-app', '-o', 'json', '-'] + args, data=template_name, check_rc=True)
+      (rc, stdout, stderr) = self.run_command(['oc', 'new-app', '-o', 'json', '-'] + args, data=template_name, check_rc=True)
     else:
-      (rc, stdout, stderr) = self.module.run_command(['oc', 'new-app', '-o', 'json', template_name] + args, check_rc=True)
+      (rc, stdout, stderr) = self.run_command(['oc', 'new-app', '-o', 'json', template_name] + args, check_rc=True)
 
     if stderr:
       self.module.fail_json(msg=stderr, debug=self.log)
@@ -262,10 +276,13 @@ def main():
 
     resource = ResourceModule(module)
 
-    if resource.template:
-      resource.apply_template(resource.template, resource.arguments)
-    else:
-      resource.update_resource(resource.patch)
+    try:
+      if resource.template:
+        resource.apply_template(resource.template, resource.arguments)
+      else:
+        resource.update_resource(resource.patch)
+    except Exception as e:
+      module.fail_json(msg=e.message, traceback=traceback.format_exc().split('\n'), debug=resource.log)
 
     if module._verbosity >= 3:
       module.exit_json(changed=resource.changed, msg=resource.msg, debug=resource.log)
