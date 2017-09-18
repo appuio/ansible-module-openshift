@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
 import json
-from StringIO import StringIO
 import tempfile
 import re
 import traceback
@@ -121,7 +120,7 @@ class ResourceModule:
     self.trace("patch_applied %s", path)
 
     if current is None:
-      if not patch is None and not self.exemption(kind, current, patch, path):
+      if not patch is None and not patch is False and not self.exemption(kind, current, patch, path):
         self.msg.append(self.namespace + "::" + kind + "/" + name + "{" + path + "}(" + str(patch) + " != " + str(current) + ")")
         return False
     elif isinstance(patch, dict):
@@ -186,7 +185,7 @@ class ResourceModule:
     (rc, stdout, stderr) = self.module.run_command(['oc', 'get', '-n', self.namespace, kind + '/' + name, '-o', 'json'])
 
     if rc == 0:
-      result = json.load(StringIO(stdout))
+      result = json.loads(stdout)
     else:
       result = {}
 
@@ -235,22 +234,25 @@ class ResourceModule:
     self.debug("process_template")
 
     if arguments:
-      args = [_ for arg in arguments.items() for _ in ('-p', "=".join(arg))]
+      args = [_ for arg in arguments.items() for _ in ('-v', "=".join(arg))]
     else:
       args = []
 
-    if self.app_name:
-      args.append('--name=' + self.app_name)
-
     if "\n" in template_name:
-      (rc, stdout, stderr) = self.run_command(['oc', 'new-app', '-o', 'json', '-'] + args, data=template_name, check_rc=True)
+      (rc, stdout, stderr) = self.run_command(['oc', 'process', '-o', 'json', '-f', '-'] + args, data=template_name, check_rc=True)
     else:
-      (rc, stdout, stderr) = self.run_command(['oc', 'new-app', '-o', 'json', template_name] + args, check_rc=True)
+      (rc, stdout, stderr) = self.run_command(['oc', 'process', '-o', 'json', '-f', template_name] + args, check_rc=True)
 
     if stderr:
       self.module.fail_json(msg=stderr, debug=self.log)
 
-    return json.load(StringIO(stdout))
+    template = json.loads(stdout)
+
+    if self.app_name:
+      for item in template['items']:
+        item.setdefault('metadata', {}).setdefault('labels', {})['app'] = self.app_name
+
+    return template
 
 
   def apply_template(self, template_name, arguments):
