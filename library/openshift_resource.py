@@ -84,6 +84,8 @@ class ResourceModule:
     if self.module._verbosity < 3 or not kwargs['check_rc']:  # Not running in debug mode, call module run_command which filters passwords
       return self.module.run_command(args, **kwargs)
 
+    self.debug("run_command %s", args)
+
     kwargs['check_rc'] = False
     (rc, stdout, stderr) = self.module.run_command(args, **kwargs)
 
@@ -234,7 +236,7 @@ class ResourceModule:
     self.debug("process_template")
 
     if arguments:
-      args = [_ for arg in arguments.items() for _ in ('-v', "=".join(arg))]
+      args = [_ for arg in arguments.items() for _ in ('-v', "=".join(arg)) if not arg[1].startswith('__omit_place_holder__')]
     else:
       args = []
 
