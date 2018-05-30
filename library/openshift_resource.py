@@ -89,7 +89,8 @@ class ResourceModule:
     kwargs['check_rc'] = False
     (rc, stdout, stderr) = self.module.run_command(args, **kwargs)
 
-    if rc != 0:
+    # Interpret oc patch rc==1 and the result 'not patched' not as error
+    if rc != 0 and not stdout.endswith(' not patched\n'):
       self.module.fail_json(cmd=args, rc=rc, stdout=stdout, stderr=stderr, msg=stderr, debug=self.log)
 
     return (rc, stdout, stderr)
