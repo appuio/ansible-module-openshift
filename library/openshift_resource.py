@@ -206,7 +206,11 @@ class ResourceModule:
 
   def patch_resource(self, kind, name, patch):
     if not self.module.check_mode:
-      (rc, stdout, stderr) = self.run_command(['oc', 'patch', '-n', self.namespace, kind + '/' + name, '-p', json.dumps(patch)], check_rc=True)
+      (rc, stdout, stderr) = self.run_command(['oc', 'patch', '-n', self.namespace, kind + '/' + name, '-p', json.dumps(patch)], check_rc=False)
+
+      # Interpret oc patch rc==1 and the result 'not patched' not as error
+      if rc != 0 and not stdout.endswith(' not patched\n'):
+        self.module.fail_json(msg="openshift_resource: patch_resource failed", debug=self.log)
 
 
   def update_resource(self, object, path = ""):
