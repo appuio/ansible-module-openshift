@@ -241,7 +241,7 @@ class ResourceModule:
     self.debug("process_template")
 
     if arguments:
-      args = [_ for arg in arguments.items() for _ in ('-v', "=".join(arg)) if not arg[1].startswith('__omit_place_holder__')]
+      args = [_ for arg in arguments.items() for _ in ('-p', "=".join(arg)) if not arg[1].startswith('__omit_place_holder__')]
     else:
       args = []
 
